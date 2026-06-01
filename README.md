@@ -1,6 +1,6 @@
 # TALARIA — Token Efficiency Protocol
 
-**Live → https://talaria-gamma.vercel.app**
+**Live → https://talariaos.xyz**
 
 > Stop wasting tokens your agent never reads.
 
@@ -44,7 +44,7 @@ npm run dev
 
 ## Links
 
-- 🌐 **Live** — https://talaria-gamma.vercel.app
+- 🌐 **Live** — https://talariaos.xyz
 - 🐦 **Twitter** — https://x.com/Talaria_OS
 - 🔬 **Base layer** — https://github.com/NousResearch/hermes-agent
 

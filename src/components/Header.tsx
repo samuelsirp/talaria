@@ -43,7 +43,7 @@ export default function Header() {
         </div>
 
         <div className="hidden sm:flex items-center gap-2 text-[10px] text-[var(--dim)]">
-          <a href="https://talaria-gamma.vercel.app" target="_blank" rel="noreferrer" className="hdr-item px-2 py-1 border border-[var(--line)] rounded hover:border-[var(--accent)]/50 hover:text-[var(--accent)] transition-colors">v0.1.0 ↗</a>
+          <a href="https://talariaos.xyz" target="_blank" rel="noreferrer" className="hdr-item px-2 py-1 border border-[var(--line)] rounded hover:border-[var(--accent)]/50 hover:text-[var(--accent)] transition-colors">talariaos.xyz ↗</a>
           <a href="https://github.com/NousResearch/hermes-agent" target="_blank" rel="noreferrer"
              className="hdr-item px-2 py-1 border border-[var(--line)] rounded hover:border-[var(--accent)]/50 hover:text-[var(--accent)] transition-colors">
             NousResearch/hermes-agent
