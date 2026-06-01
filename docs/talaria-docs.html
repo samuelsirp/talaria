@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>TALARIA — Technical Documentation</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Segoe UI", Helvetica, Arial, sans-serif;
+    color: #11202b;
+    line-height: 1.55;
+    font-size: 11pt;
+    margin: 0;
+  }
+  code, pre { font-family: "Consolas", "SF Mono", monospace; }
+  h1, h2, h3 { color: #0a3d4a; line-height: 1.2; }
+  h1 { font-size: 30pt; margin: 0 0 4px; }
+  h2 { font-size: 17pt; margin: 26px 0 8px; border-bottom: 2px solid #34e0c0; padding-bottom: 4px; }
+  h3 { font-size: 13pt; margin: 16px 0 4px; color: #14525f; }
+  a { color: #1577a8; }
+  .accent { color: #0f9c83; font-weight: 600; }
+  .cover {
+    page-break-after: always;
+    padding-top: 120px;
+  }
+  .cover .mark {
+    display: inline-block; width: 54px; height: 54px; border-radius: 10px;
+    border: 2px solid #0f9c83; color:#0f9c83; text-align:center; line-height:54px; font-size:26px;
+  }
+  .cover .sub { color:#5a6b80; letter-spacing: 4px; text-transform: uppercase; font-size: 11pt; margin-top: 6px; }
+  .meta { margin-top: 40px; color:#5a6b80; font-size: 10pt; }
+  .meta b { color:#11202b; }
+  pre {
+    background: #0a0e16; color: #cfe9e3; padding: 12px 14px; border-radius: 6px;
+    font-size: 9.5pt; overflow-x: auto; white-space: pre-wrap; word-break: break-word;
+    border: 1px solid #1c2a38;
+  }
+  code.inline { background: #e8f6f2; color: #0a5c4d; padding: 1px 5px; border-radius: 3px; font-size: 9.5pt; }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 10pt; }
+  th, td { border: 1px solid #cdd9e0; padding: 6px 9px; text-align: left; vertical-align: top; }
+  th { background: #eef7f5; color: #0a3d4a; }
+  ul { margin: 6px 0 6px 18px; padding: 0; }
+  li { margin: 3px 0; }
+  .tag { display:inline-block; background:#eef7f5; color:#0f9c83; border:1px solid #b9e3da; border-radius:4px; padding:1px 7px; font-size:8.5pt; margin-right:4px; }
+  .note { background:#f3faf8; border-left:4px solid #34e0c0; padding:8px 12px; margin:10px 0; font-size:10pt; }
+  footer { margin-top: 30px; border-top:1px solid #cdd9e0; padding-top:8px; color:#8896a3; font-size:8.5pt; }
+  .toc li { margin: 4px 0; }
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <div class="mark">⟁</div>
+  <h1>TALARIA</h1>
+  <div class="sub">Token Efficiency Protocol</div>
+  <p style="max-width:460px; color:#3a4a57; margin-top:24px;">
+    Technical documentation for the TALARIA protocol and reference web application —
+    a token-efficiency layer for autonomous coding agents, with an on-chain verification model.
+  </p>
+  <div class="meta">
+    <div><b>Version:</b> 0.1.0</div>
+    <div><b>License:</b> 100% free · no subscription · open source</div>
+    <div><b>Base layer:</b> NousResearch / hermes-agent</div>
+    <div><b>Network:</b> Base Mainnet (chain 8453)</div>
+    <div><b>Document type:</b> Technical specification &amp; architecture</div>
+  </div>
+</section>
+
+<h2>1. Overview</h2>
+<p>
+  <span class="accent">TALARIA</span> is a token-efficiency protocol that patches an agent's file-operation
+  tooling to reduce token spend during iterative editing loops — the most common operation an autonomous
+  coding agent performs. It introduces two changes to <code class="inline">tools/file_operations.py</code>:
+</p>
+<ul>
+  <li><b>Delta Reads</b> — when a file is re-read, only the changed hunks are sent back to the model, not the full file.</li>
+  <li><b>Compact gutter format</b> — line-number gutters drop leading padding (<code class="inline">␣␣34␣␣</code> → <code class="inline">34|</code>), which would otherwise tokenize into extra tokens on every line.</li>
+</ul>
+<p>Together these cut up to <span class="accent">~40%</span> of token spend on iterative editing loops while keeping line numbers the model can reference.</p>
+
+<div class="note">
+  <b>Why line numbers stay:</b> the model references gutter numbers when patching. Removing them entirely
+  (the "no numbers" variant) caused off-by-one errors. Only the <i>padding</i> is removed, never the numbers.
+</div>
+
+<h2>2. Token Efficiency Model</h2>
+<h3>2.1 Gutter format comparison</h3>
+<table>
+  <tr><th>Format</th><th>Example</th><th>Token overhead vs bare</th></tr>
+  <tr><td>Padded (legacy)</td><td><code class="inline">␣␣1␣␣␣import os</code></td><td>+48%</td></tr>
+  <tr><td>Compact</td><td><code class="inline">1| import os</code></td><td>+16%</td></tr>
+  <tr><td>Compact + Delta</td><td>re-reads send only diffs</td><td>−24%</td></tr>
+  <tr><td>No numbers</td><td><code class="inline">import os</code></td><td>0% (but off-by-one errors)</td></tr>
+</table>
+
+<h3>2.2 A/B result battery</h3>
+<p>Model: Sonnet 4.6 · 2 passes · 4-task battery.</p>
+<table>
+  <tr><th>Variation</th><th>Result</th><th>Notes</th><th>Δ Tokens</th></tr>
+  <tr><td>padded (legacy)</td><td>4/4 PASS</td><td>baseline format</td><td>+48%</td></tr>
+  <tr><td>compact</td><td>4/4 PASS</td><td>numbers referenced correctly</td><td>+16%</td></tr>
+  <tr><td>compact + delta</td><td>4/4 PASS</td><td>re-reads send only diffs</td><td>−24%</td></tr>
+  <tr><td>no numbers</td><td>3/4 PASS</td><td>off-by-one, hand-counted</td><td>0%</td></tr>
+</table>
+
+<h3>2.3 Unaffected by the format change</h3>
+<ul>
+  <li>patch / fuzzy_match — match text, never consume the gutter</li>
+  <li>no downstream parser keys on fixed-width columns</li>
+  <li>editing behavior is identical</li>
+  <li>blockchain hash verification is unaffected</li>
+</ul>
+
+<h2>3. Architecture</h2>
+<p>The reference web application is a single-page, tabbed dashboard built with the following stack:</p>
+<p>
+  <span class="tag">Next.js 16.2.7</span>
+  <span class="tag">React 19</span>
+  <span class="tag">TypeScript</span>
+  <span class="tag">Tailwind CSS v4</span>
+  <span class="tag">GSAP + @gsap/react</span>
+  <span class="tag">Turbopack</span>
+</p>
+
+<h3>3.1 Application shell</h3>
+<pre>src/app/
+  layout.tsx        TALARIA metadata, root layout
+  page.tsx          client root: tab state + animated tab transitions
+  globals.css       dark theme tokens, keyframes, hover utilities
+
+src/components/
+  Header.tsx        winged-sandal logo, shimmer title, intro stagger
+  Ticker.tsx        scrolling status ticker
+  TabNav.tsx        tabs + sliding GSAP indicator
+  StatsSection.tsx  token-efficiency hook, live counters, A/B table
+  ConfigSection.tsx    format/agent/blockchain settings, raw JSON
+  ChainSection.tsx     live block feed, on-chain proofs, hash verifier
+  DocsSection.tsx      embedded technical documentation (this PDF)
+  BackgroundFX.tsx     interactive particle constellation + cursor glow
+  anim/                reusable GSAP primitives (see §4)</pre>
+
+<h3>3.2 Tabs</h3>
+<table>
+  <tr><th>#</th><th>Tab</th><th>Purpose</th></tr>
+  <tr><td>1</td><td>STATS</td><td>Token-efficiency hook, live counters, format comparison, A/B results</td></tr>
+  <tr><td>2</td><td>CONFIG</td><td>Format protocol, Hermes agent settings, blockchain configuration</td></tr>
+  <tr><td>3</td><td>CHAIN</td><td>Network status, on-chain proofs, live block feed, hash verifier</td></tr>
+  <tr><td>4</td><td>DOCS</td><td>This technical documentation</td></tr>
+</table>
+
+<h2>4. Animation System (GSAP)</h2>
+<p>All GSAP plugins are registered once in a single client-only module so they work safely with SSR:</p>
+<pre>// src/lib/gsap.ts
+"use client";
+import { gsap } from "gsap";
+import { useGSAP } from "@gsap/react";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { ScrambleTextPlugin } from "gsap/ScrambleTextPlugin";
+import { SplitText } from "gsap/SplitText";
+gsap.registerPlugin(useGSAP, ScrollTrigger, ScrambleTextPlugin, SplitText);
+export { gsap, useGSAP, ScrollTrigger, ScrambleTextPlugin, SplitText };</pre>
+
+<h3>4.1 Reusable primitives</h3>
+<table>
+  <tr><th>Component</th><th>Role</th></tr>
+  <tr><td><code class="inline">Reveal</code></td><td>Scroll-triggered fade/slide-in; can stagger immediate children.</td></tr>
+  <tr><td><code class="inline">SplitReveal</code></td><td>Per-character heading reveal via SplitText.</td></tr>
+  <tr><td><code class="inline">Scramble</code></td><td>ScrambleText glitch reveal (used on the newest block hash).</td></tr>
+  <tr><td><code class="inline">CountUp</code></td><td>Scroll-triggered numeric count-up with an infinite drift creep.</td></tr>
+  <tr><td><code class="inline">Magnetic</code></td><td>Cursor-following magnetic wrapper for CTAs (quickTo + contextSafe).</td></tr>
+  <tr><td><code class="inline">BackgroundFX</code></td><td>Canvas particle constellation attracted to the cursor + radial glow.</td></tr>
+</table>
+
+<div class="note">
+  Every animation uses the <code class="inline">useGSAP()</code> hook with a <code class="inline">scope</code>,
+  so tweens and ScrollTriggers are automatically reverted on unmount — no manual cleanup or SSR leaks.
+</div>
+
+<h2>5. On-Chain Verification Layer</h2>
+<p>
+  <span class="accent">TALARIA is 100% free — there is no payment, subscription or paywall.</span>
+  All features (Delta Reads, compact gutter and on-chain verification) are available to everyone.
+  The on-chain layer below exists purely to verify and audit reads, not to charge for them.
+</p>
+<h3>5.1 Network</h3>
+<table>
+  <tr><th>Parameter</th><th>Value</th></tr>
+  <tr><td>Network</td><td>Base Mainnet</td></tr>
+  <tr><td>Chain ID</td><td>8453</td></tr>
+  <tr><td>RPC</td><td>mainnet.base.org</td></tr>
+  <tr><td>Block time</td><td>~2 seconds</td></tr>
+</table>
+
+<h3>5.2 On-chain verification</h3>
+<p>Every format change is hashed to Base, producing an immutable audit trail. The CHAIN tab renders a live
+block feed and a hash verifier UI. Verification is independent of the gutter format change.</p>
+
+<h2>6. Configuration Reference</h2>
+<pre>{
+  "gutter_format": "compact",
+  "delta_reads": true,
+  "branch_mode": "none",
+  "fuzzy_match": true,
+  "model": "hermes-3-70b",
+  "max_tokens": 4096,
+  "temperature": 0.7,
+  "on_chain_verify": true,
+  "network": "base-mainnet",
+  "chain_id": 8453,
+  "contract_addr": "0x8335...0913",
+  "gas_strategy": "standard"
+}</pre>
+
+<h2>7. Running Locally</h2>
+<pre>npm install
+npm run dev      # starts the Next.js dev server (Turbopack)
+# open http://localhost:3001</pre>
+<p>The protocol patches <code class="inline">tools/file_operations.py</code> in the host agent; the web app
+documented here is the dashboard and protocol front-end.</p>
+
+<footer>
+  TALARIA — Token Efficiency Protocol · Technical Documentation v0.1.0 ·
+  Built on NousResearch/hermes-agent · Generated for the TALARIA reference application.
+</footer>
+
+</body>
+</html>
